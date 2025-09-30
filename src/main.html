@@ -40,11 +40,13 @@
                 left: false,
                 right: false
             };
-            this.roverSpeed = 100;
-            this.roverRotationSpeed = 100;
+            this.roverSpeed = 5;
+            this.roverRotationSpeed = .05; // Angular velocity for Matter.js rotation (rad/s)
+            this.roverForce = 0.005; // Force for Matter.js movement
+            this.roverTorque = 2; // Torque for Matter.js rotation
             
             // Input delay system
-            this.inputDelay = 0.5; // Configurable delay in seconds (0.5 = 500ms)
+            this.inputDelay = 1.0; // Configurable delay in seconds (0.5 = 500ms)
             this.inputQueue = [];
             this.delayedInput = {
                 up: false,
@@ -70,10 +72,14 @@
             this.load.image('mars-bg', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==');
             
             // Create rover sprite (simple rectangle)
-            this.add.graphics()
-                .fillStyle(0x4A90E2)
-                .fillRect(0, 0, 40, 20)
-                .generateTexture('rover', 40, 20);
+            // this.add.graphics()
+            //     .fillStyle(0x4A90E2)
+            //     .fillRect(0, 0, 40, 20)
+            //     .generateTexture('rover', 40, 20);
+
+            //Create rover sprite from svg
+            this.load.svg('rover', 'static/rover.svg', { width: 90, height: 120 });
+
             
             // Create sample sprite (small circle)
             this.add.graphics()
@@ -85,32 +91,64 @@
         create ()
         {
             // Mars terrain background
-            this.add.rectangle(0, 0, this.cameras.main.width * 2, this.cameras.main.height * 2, 0xCD853F);
+            let world_extent = 20;
+            this.add.rectangle(0, 0, this.cameras.main.width * world_extent, this.cameras.main.height * world_extent, 0xCD853F);
+
+            //Make world large
+            // this.game.world.setBounds(0,0,1600,1200);
             
             // Add some terrain details
-            for (let i = 0; i < 50; i++) {
-                let x = Phaser.Math.Between(0, this.cameras.main.width);
-                let y = Phaser.Math.Between(0, this.cameras.main.height);
+            for (let i = 0; i < 50*world_extent; i++) {
+                let x = Phaser.Math.Between(0, this.cameras.main.width*world_extent);
+                let y = Phaser.Math.Between(0, this.cameras.main.height*world_extent);
                 let size = Phaser.Math.Between(5, 15);
                 this.add.circle(x, y, size, 0x8B4513);
             }
 
-            // Create rover
-            this.rover = this.physics.add.sprite(400, 300, 'rover');
-            this.rover.setCollideWorldBounds(true);
-            this.rover.setDrag(0);
-            this.rover.setMaxVelocity(this.roverSpeed);
+            // Create rover with Matter.js physics
+            this.rover = this.add.sprite(400, 300, 'rover');
+            this.matter.add.gameObject(this.rover);
+            
+            // Configure Matter.js body for the rover - no momentum settings
+            this.rover.setRectangle(this.rover.width, this.rover.height); // Set collision shape as rectangle
+            this.rover.setFrictionAir(0); // No air resistance for instant movement
+            this.rover.setFriction(0); // No surface friction
+            this.rover.setBounce(0); // No bounce
+            this.rover.setDensity(0.001); // Mass density
 
             // Create sample group
-            this.samples = this.physics.add.group();
+            this.samples = this.add.group();
             this.spawnSamples();
 
             // Setup keyboard controls
             this.cursors = this.input.keyboard.createCursorKeys();
             this.wasd = this.input.keyboard.addKeys('W,S,A,D');
 
-            // Setup collision between rover and samples
-            this.physics.add.overlap(this.rover, this.samples, this.collectSample, null, this);
+            // Setup collision between rover and samples using Matter.js collision events
+            this.matter.world.on('collisionstart', (event) => {
+                const pairs = event.pairs;
+                
+                for (let i = 0; i < pairs.length; i++) {
+                    const bodyA = pairs[i].bodyA;
+                    const bodyB = pairs[i].bodyB;
+                    
+                    // Check if collision is between rover and sample
+                    let roverBody = null;
+                    let sampleBody = null;
+                    
+                    if (bodyA.gameObject === this.rover && bodyB.gameObject && this.samples.children.entries.includes(bodyB.gameObject)) {
+                        roverBody = bodyA;
+                        sampleBody = bodyB;
+                    } else if (bodyB.gameObject === this.rover && bodyA.gameObject && this.samples.children.entries.includes(bodyA.gameObject)) {
+                        roverBody = bodyB;
+                        sampleBody = bodyA;
+                    }
+                    
+                    if (roverBody && sampleBody) {
+                        this.collectSample(roverBody.gameObject, sampleBody.gameObject);
+                    }
+                }
+            });
 
             // Setup camera to follow rover
             this.cameras.main.startFollow(this.rover);
@@ -156,8 +194,8 @@
 
         spawnSamples() {
             for (let i = 0; i < 15; i++) {
-                let x = Phaser.Math.Between(50, this.cameras.main.width - 50);
-                let y = Phaser.Math.Between(50, this.cameras.main.height - 50);
+                let x = Phaser.Math.Between(50, this.cameras.main.width*2 - 50);
+                let y = Phaser.Math.Between(50, this.cameras.main.height*2 - 50);
                 
                 // Make sure samples don't spawn too close to rover
                 while (Phaser.Math.Distance.Between(x, y, 400, 300) < 100) {
@@ -165,8 +203,17 @@
                     y = Phaser.Math.Between(50, this.cameras.main.height - 50);
                 }
                 
-                let sample = this.samples.create(x, y, 'sample');
-                sample.body.setImmovable(true);
+                let sample = this.add.sprite(x, y, 'sample');
+                this.matter.add.gameObject(sample);
+                this.samples.add(sample);
+                
+                // Configure Matter.js body for samples
+                sample.setCircle(8); // Circular collision shape with radius 8
+                sample.setStatic(true); // Samples don't move
+                sample.setSensor(true); // Samples are sensors (trigger collision events but don't physically collide)
+                
+                // Add custom properties for identification
+                sample.sampleId = i;
             }
         }
 
@@ -178,8 +225,15 @@
             // Spawn new sample
             let x = Phaser.Math.Between(50, this.cameras.main.width - 50);
             let y = Phaser.Math.Between(50, this.cameras.main.height - 50);
-            let newSample = this.samples.create(x, y, 'sample');
-            newSample.body.setImmovable(true);
+            let newSample = this.add.sprite(x, y, 'sample');
+            this.matter.add.gameObject(newSample);
+            this.samples.add(newSample);
+            
+            // Configure Matter.js body for new sample
+            newSample.setCircle(8);
+            newSample.setStatic(true);
+            newSample.setSensor(true);
+            newSample.sampleId = this.score + 15; // Unique ID
         }
 
         setupMobileControls() {
@@ -397,7 +451,7 @@
             // Process delayed inputs
             this.processDelayedInput();
 
-            // Handle rotation using delayed input
+            // Handle rotation using delayed input with Matter.js
             if (this.delayedInput.left) {
                 this.rover.setAngularVelocity(-this.roverRotationSpeed);
             } else if (this.delayedInput.right) {
@@ -406,12 +460,19 @@
                 this.rover.setAngularVelocity(0);
             }
 
-            // Handle movement using delayed input - always at max speed
+            // Handle movement using delayed input with direct velocity (no momentum)
             if (this.delayedInput.up) {
-                this.physics.velocityFromRotation(this.rover.rotation, this.roverSpeed, this.rover.body.velocity);
+                // Set forward velocity in the direction the rover is facing
+                const velocityX = Math.cos(this.rover.rotation - Math.PI/2) * this.roverSpeed;
+                const velocityY = Math.sin(this.rover.rotation - Math.PI/2) * this.roverSpeed;
+                this.rover.setVelocity(velocityX, velocityY);
             } else if (this.delayedInput.down) {
-                this.physics.velocityFromRotation(this.rover.rotation, -this.roverSpeed * 0.5, this.rover.body.velocity);
+                // Set backward velocity (half speed)
+                const velocityX = -Math.cos(this.rover.rotation - Math.PI/2) * this.roverSpeed * 0.5;
+                const velocityY = -Math.sin(this.rover.rotation - Math.PI/2) * this.roverSpeed * 0.5;
+                this.rover.setVelocity(velocityX, velocityY);
             } else {
+                // Stop immediately when no input
                 this.rover.setVelocity(0, 0);
             }
         }
@@ -423,10 +484,17 @@
         height: Math.min(600, window.innerHeight - 20),
         scene: MarsRoverGame,
         physics: {
-            default: 'arcade',
-            arcade: {
-                gravity: { y: 0 },
-                debug: false
+            default: 'matter',
+            matter: {
+                gravity: { x: 0, y: 0, scale: 0 }, // No gravity for top-down Mars rover
+                // debug: {
+                    // showBody: true,
+                    // showStaticBody: true,
+                    // showVelocity: true,
+                    // bodyDebugColor: 0xff00ff,
+                    // staticBodyDebugColor: 0x0000ff,
+                    // velocityDebugColor: 0x00ff00
+                // }
             }
         },
         scale: {
