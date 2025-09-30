@@ -20,7 +20,8 @@
             border-radius: 8px;
         }
     </style>
-    {% comment %} <link rel="manifest" href="./static/manifest.json"> {% endcomment %}
+    <link rel="manifest" href="static/manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
 </head>
 <body>
 
@@ -79,7 +80,7 @@
             //     .generateTexture('rover', 40, 20);
 
             //Create rover sprite from svg
-            this.load.svg('rover', 'static/rover.svg', { width: 90, height: 120 });
+            this.load.svg('rover', 'static/rover.svg', { width: 90*window.devicePixelRatio, height: 120*window.devicePixelRatio });
 
             
             // Create sample sprite (small circle)
@@ -155,30 +156,32 @@
             this.cameras.main.startFollow(this.rover);
             this.cameras.main.setZoom(0.8);
 
+            let ui_fontsize = String(24*window.devicePixelRatio)+"px";
+
             // Create UI
             this.scoreText = this.add.text(16, 16, 'Samples: 0', {
-                fontSize: '24px',
+                fontSize: ui_fontsize,
                 fill: '#ffffff',
-                stroke: '#000000',
+                // stroke: '#000000',
                 strokeThickness: 2
             });
             this.scoreText.setScrollFactor(0);
 
             // Add input delay indicator
-            this.delayText = this.add.text(16, 50, `Input Delay: ${this.inputDelay}s`, {
-                fontSize: '18px',
+            this.delayText = this.add.text(16, 16 + 24*window.devicePixelRatio, `Input Delay: ${this.inputDelay}s`, {
+                fontSize: ui_fontsize,
                 fill: '#ffff00',
-                stroke: '#000000',
-                strokeThickness: 2
+                // stroke: '#000000',
+                strokeThickness: 1
             });
             this.delayText.setScrollFactor(0);
 
             // Create queue visualization
-            this.queueTitle = this.add.text(16, 80, 'Input Queue:', {
-                fontSize: '16px',
+            this.queueTitle = this.add.text(16, 16 + 48*window.devicePixelRatio, 'Input Queue:', {
+                fontSize: ui_fontsize,
                 fill: '#00ff00',
-                stroke: '#000000',
-                strokeThickness: 2
+                // stroke: '#000000',
+                strokeThickness: 1
             });
             this.queueTitle.setScrollFactor(0);
 
@@ -240,11 +243,11 @@
         setupMobileControls() {
             // Create virtual D-pad for mobile
             if (this.sys.game.device.input.touch) {
-                const controlSize = 60;
+                const controlSize = 60*window.devicePixelRatio;
                 const padding = 20;
                 
                 // Up button
-                this.upBtn = this.add.rectangle(80, this.cameras.main.height - 120, controlSize, controlSize, 0x666666, 0.7)
+                this.upBtn = this.add.rectangle(80*window.devicePixelRatio, this.cameras.main.height - 120*window.devicePixelRatio, controlSize, controlSize, 0x666666, 0.7)
                     .setScrollFactor(0)
                     .setInteractive()
                     .on('pointerdown', () => this.touchControls.up = true)
@@ -252,7 +255,7 @@
                     .on('pointerout', () => this.touchControls.up = false);
                 
                 // Down button
-                this.downBtn = this.add.rectangle(80, this.cameras.main.height - 40, controlSize, controlSize, 0x666666, 0.7)
+                this.downBtn = this.add.rectangle(80*window.devicePixelRatio, this.cameras.main.height - 40*window.devicePixelRatio, controlSize, controlSize, 0x666666, 0.7)
                     .setScrollFactor(0)
                     .setInteractive()
                     .on('pointerdown', () => this.touchControls.down = true)
@@ -260,7 +263,7 @@
                     .on('pointerout', () => this.touchControls.down = false);
                 
                 // Left button
-                this.leftBtn = this.add.rectangle(40, this.cameras.main.height - 80, controlSize, controlSize, 0x666666, 0.7)
+                this.leftBtn = this.add.rectangle(40*window.devicePixelRatio, this.cameras.main.height - 80*window.devicePixelRatio, controlSize, controlSize, 0x666666, 0.7)
                     .setScrollFactor(0)
                     .setInteractive()
                     .on('pointerdown', () => this.touchControls.left = true)
@@ -268,7 +271,7 @@
                     .on('pointerout', () => this.touchControls.left = false);
                 
                 // Right button
-                this.rightBtn = this.add.rectangle(120, this.cameras.main.height - 80, controlSize, controlSize, 0x666666, 0.7)
+                this.rightBtn = this.add.rectangle(120*window.devicePixelRatio, this.cameras.main.height - 80*window.devicePixelRatio, controlSize, controlSize, 0x666666, 0.7)
                     .setScrollFactor(0)
                     .setInteractive()
                     .on('pointerdown', () => this.touchControls.right = true)
@@ -276,22 +279,21 @@
                     .on('pointerout', () => this.touchControls.right = false);
                 
                 // Add arrow symbols
-                this.add.text(80, this.cameras.main.height - 120, '↑', { fontSize: '24px', fill: '#ffffff' })
+                this.add.text(80*window.devicePixelRatio, this.cameras.main.height - 120*window.devicePixelRatio, '↑', { fontSize: String(24*window.devicePixelRatio)+"px", fill: '#ffffff' })
                     .setOrigin(0.5).setScrollFactor(0);
-                this.add.text(80, this.cameras.main.height - 40, '↓', { fontSize: '24px', fill: '#ffffff' })
+                this.add.text(80*window.devicePixelRatio, this.cameras.main.height - 40*window.devicePixelRatio, '↓', { fontSize: String(24*window.devicePixelRatio)+"px", fill: '#ffffff' })
                     .setOrigin(0.5).setScrollFactor(0);
-                this.add.text(40, this.cameras.main.height - 80, '←', { fontSize: '24px', fill: '#ffffff' })
+                this.add.text(40*window.devicePixelRatio, this.cameras.main.height - 80*window.devicePixelRatio, '←', { fontSize: String(24*window.devicePixelRatio)+"px", fill: '#ffffff' })
                     .setOrigin(0.5).setScrollFactor(0);
-                this.add.text(120, this.cameras.main.height - 80, '→', { fontSize: '24px', fill: '#ffffff' })
+                this.add.text(120*window.devicePixelRatio, this.cameras.main.height - 80*window.devicePixelRatio, '→', { fontSize: String(24*window.devicePixelRatio)+"px", fill: '#ffffff' })
                     .setOrigin(0.5).setScrollFactor(0);
             }
         }
 
         createQueueIndicator(inputState, index) {
-            const startX = 150;
-            const startY = 85;
-            const boxSize = 20;
-            const spacing = 25;
+            const startX = 150*window.devicePixelRatio;
+            const boxSize = 20*window.devicePixelRatio;
+            const spacing = 25*window.devicePixelRatio;
             
             // Create background box
             const bg = this.add.rectangle(
@@ -306,9 +308,10 @@
             // Create input indicators
             const indicators = [];
 
+            let indicator_fontsize = String(12*window.devicePixelRatio)+"px";
             if (inputState.up ) {
                 indicators.push(this.add.text(startX + (index * spacing), startY - 5, '↑', {
-                    fontSize: '12px',
+                    fontSize: indicator_fontsize,
                     fill: '#00ff00',
                     align: 'center'
                 }).setOrigin(0.5).setScrollFactor(0));
@@ -316,7 +319,7 @@
             
             if (inputState.down) {
                 indicators.push(this.add.text(startX + (index * spacing), startY + 5, '↓', {
-                    fontSize: '12px',
+                    fontSize: indicator_fontsize,
                     fill: '#00ff00',
                     align: 'center'
                 }).setOrigin(0.5).setScrollFactor(0));
@@ -324,7 +327,7 @@
             
             if (inputState.left) {
                 indicators.push(this.add.text(startX + (index * spacing) - 5, startY, '←', {
-                    fontSize: '12px',
+                    fontSize: indicator_fontsize,
                     fill: '#00ff00',
                     align: 'center'
                 }).setOrigin(0.5).setScrollFactor(0));
@@ -332,7 +335,7 @@
             
             if (inputState.right) {
                 indicators.push(this.add.text(startX + (index * spacing) + 5, startY, '→', {
-                    fontSize: '12px',
+                    fontSize: indicator_fontsize,
                     fill: '#00ff00',
                     align: 'center'
                 }).setOrigin(0.5).setScrollFactor(0));
@@ -481,21 +484,22 @@
 
     const config = {
         type: Phaser.AUTO,
-        width: Math.min(800, window.innerWidth - 20),
-        height: Math.min(600, window.innerHeight - 20),
+        width: (window.innerWidth - 20)*window.devicePixelRatio,
+        height: (window.innerHeight - 20)*window.devicePixelRatio,
         scene: MarsRoverGame,
+
         physics: {
             default: 'matter',
             matter: {
                 gravity: { x: 0, y: 0, scale: 0 }, // No gravity for top-down Mars rover
-                // debug: {
-                    // showBody: true,
-                    // showStaticBody: true,
-                    // showVelocity: true,
-                    // bodyDebugColor: 0xff00ff,
-                    // staticBodyDebugColor: 0x0000ff,
-                    // velocityDebugColor: 0x00ff00
-                // }
+                debug: {
+                    showBody: true,
+                    showStaticBody: true,
+                    showVelocity: true,
+                    bodyDebugColor: 0xff00ff,
+                    staticBodyDebugColor: 0x0000ff,
+                    velocityDebugColor: 0x00ff00
+                }
             }
         },
         scale: {
