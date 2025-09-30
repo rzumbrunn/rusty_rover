@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Mars Rover Sample Collector</title>
+    <script src="phaser.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #2c1810;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        canvas {
+            border: 2px solid #8B4513;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+    <script>
+    class MarsRoverGame extends Phaser.Scene
+    {
+        constructor() {
+            super({ key: 'MarsRoverGame' });
+            this.rover = null;
+            this.samples = null;
+            this.cursors = null;
+            this.wasd = null;
+            this.score = 0;
+            this.scoreText = null;
+            this.touchControls = {
+                up: false,
+                down: false,
+                left: false,
+                right: false
+            };
+            this.roverSpeed = 100;
+            this.roverRotationSpeed = 100;
+            
+            // Input delay system
+            this.inputDelay = 0.5; // Configurable delay in seconds (0.5 = 500ms)
+            this.inputQueue = [];
+            this.delayedInput = {
+                up: false,
+                down: false,
+                left: false,
+                right: false
+            };
+            this.previousInputState = {
+                up: false,
+                down: false,
+                left: false,
+                right: false
+            };
+            
+            // Visual queue indicator
+            this.queueIndicators = [];
+            this.queueContainer = null;
+        }
+
+        preload ()
+        {
+            // Create simple colored rectangles as placeholders for sprites
+            this.load.image('mars-bg', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==');
+            
+            // Create rover sprite (simple rectangle)
+            this.add.graphics()
+                .fillStyle(0x4A90E2)
+                .fillRect(0, 0, 40, 20)
+                .generateTexture('rover', 40, 20);
+            
+            // Create sample sprite (small circle)
+            this.add.graphics()
+                .fillStyle(0xFF6B35)
+                .fillCircle(8, 8, 8)
+                .generateTexture('sample', 16, 16);
+        }
+
+        create ()
+        {
+            // Mars terrain background
+            this.add.rectangle(0, 0, this.cameras.main.width * 2, this.cameras.main.height * 2, 0xCD853F);
+            
+            // Add some terrain details
+            for (let i = 0; i < 50; i++) {
+                let x = Phaser.Math.Between(0, this.cameras.main.width);
+                let y = Phaser.Math.Between(0, this.cameras.main.height);
+                let size = Phaser.Math.Between(5, 15);
+                this.add.circle(x, y, size, 0x8B4513);
+            }
+
+            // Create rover
+            this.rover = this.physics.add.sprite(400, 300, 'rover');
+            this.rover.setCollideWorldBounds(true);
+            this.rover.setDrag(0);
+            this.rover.setMaxVelocity(this.roverSpeed);
+
+            // Create sample group
+            this.samples = this.physics.add.group();
+            this.spawnSamples();
+
+            // Setup keyboard controls
+            this.cursors = this.input.keyboard.createCursorKeys();
+            this.wasd = this.input.keyboard.addKeys('W,S,A,D');
+
+            // Setup collision between rover and samples
+            this.physics.add.overlap(this.rover, this.samples, this.collectSample, null, this);
+
+            // Setup camera to follow rover
+            this.cameras.main.startFollow(this.rover);
+            this.cameras.main.setZoom(0.8);
+
+            // Create UI
+            this.scoreText = this.add.text(16, 16, 'Samples: 0', {
+                fontSize: '24px',
+                fill: '#ffffff',
+                stroke: '#000000',
+                strokeThickness: 2
+            });
+            this.scoreText.setScrollFactor(0);
+
+            // Add input delay indicator
+            this.delayText = this.add.text(16, 50, `Input Delay: ${this.inputDelay}s`, {
+                fontSize: '18px',
+                fill: '#ffff00',
+                stroke: '#000000',
+                strokeThickness: 2
+            });
+            this.delayText.setScrollFactor(0);
+
+            // Create queue visualization
+            this.queueTitle = this.add.text(16, 80, 'Input Queue:', {
+                fontSize: '16px',
+                fill: '#00ff00',
+                stroke: '#000000',
+                strokeThickness: 2
+            });
+            this.queueTitle.setScrollFactor(0);
+
+            // Add delay adjustment controls (1-5 keys)
+            this.input.keyboard.on('keydown-ONE', () => this.setInputDelay(0.1));
+            this.input.keyboard.on('keydown-TWO', () => this.setInputDelay(0.3));
+            this.input.keyboard.on('keydown-THREE', () => this.setInputDelay(0.5));
+            this.input.keyboard.on('keydown-FOUR', () => this.setInputDelay(1.0));
+            this.input.keyboard.on('keydown-FIVE', () => this.setInputDelay(2.0));
+
+            // Setup mobile controls
+            this.setupMobileControls();
+        }
+
+        spawnSamples() {
+            for (let i = 0; i < 15; i++) {
+                let x = Phaser.Math.Between(50, this.cameras.main.width - 50);
+                let y = Phaser.Math.Between(50, this.cameras.main.height - 50);
+                
+                // Make sure samples don't spawn too close to rover
+                while (Phaser.Math.Distance.Between(x, y, 400, 300) < 100) {
+                    x = Phaser.Math.Between(50, this.cameras.main.width - 50);
+                    y = Phaser.Math.Between(50, this.cameras.main.height - 50);
+                }
+                
+                let sample = this.samples.create(x, y, 'sample');
+                sample.body.setImmovable(true);
+            }
+        }
+
+        collectSample(rover, sample) {
+            sample.destroy();
+            this.score += 1;
+            this.scoreText.setText('Samples: ' + this.score);
+            
+            // Spawn new sample
+            let x = Phaser.Math.Between(50, this.cameras.main.width - 50);
+            let y = Phaser.Math.Between(50, this.cameras.main.height - 50);
+            let newSample = this.samples.create(x, y, 'sample');
+            newSample.body.setImmovable(true);
+        }
+
+        setupMobileControls() {
+            // Create virtual D-pad for mobile
+            if (this.sys.game.device.input.touch) {
+                const controlSize = 60;
+                const padding = 20;
+                
+                // Up button
+                this.upBtn = this.add.rectangle(80, this.cameras.main.height - 120, controlSize, controlSize, 0x666666, 0.7)
+                    .setScrollFactor(0)
+                    .setInteractive()
+                    .on('pointerdown', () => this.touchControls.up = true)
+                    .on('pointerup', () => this.touchControls.up = false)
+                    .on('pointerout', () => this.touchControls.up = false);
+                
+                // Down button
+                this.downBtn = this.add.rectangle(80, this.cameras.main.height - 40, controlSize, controlSize, 0x666666, 0.7)
+                    .setScrollFactor(0)
+                    .setInteractive()
+                    .on('pointerdown', () => this.touchControls.down = true)
+                    .on('pointerup', () => this.touchControls.down = false)
+                    .on('pointerout', () => this.touchControls.down = false);
+                
+                // Left button
+                this.leftBtn = this.add.rectangle(40, this.cameras.main.height - 80, controlSize, controlSize, 0x666666, 0.7)
+                    .setScrollFactor(0)
+                    .setInteractive()
+                    .on('pointerdown', () => this.touchControls.left = true)
+                    .on('pointerup', () => this.touchControls.left = false)
+                    .on('pointerout', () => this.touchControls.left = false);
+                
+                // Right button
+                this.rightBtn = this.add.rectangle(120, this.cameras.main.height - 80, controlSize, controlSize, 0x666666, 0.7)
+                    .setScrollFactor(0)
+                    .setInteractive()
+                    .on('pointerdown', () => this.touchControls.right = true)
+                    .on('pointerup', () => this.touchControls.right = false)
+                    .on('pointerout', () => this.touchControls.right = false);
+                
+                // Add arrow symbols
+                this.add.text(80, this.cameras.main.height - 120, '↑', { fontSize: '24px', fill: '#ffffff' })
+                    .setOrigin(0.5).setScrollFactor(0);
+                this.add.text(80, this.cameras.main.height - 40, '↓', { fontSize: '24px', fill: '#ffffff' })
+                    .setOrigin(0.5).setScrollFactor(0);
+                this.add.text(40, this.cameras.main.height - 80, '←', { fontSize: '24px', fill: '#ffffff' })
+                    .setOrigin(0.5).setScrollFactor(0);
+                this.add.text(120, this.cameras.main.height - 80, '→', { fontSize: '24px', fill: '#ffffff' })
+                    .setOrigin(0.5).setScrollFactor(0);
+            }
+        }
+
+        createQueueIndicator(inputState, index) {
+            const startX = 150;
+            const startY = 85;
+            const boxSize = 20;
+            const spacing = 25;
+            
+            // Create background box
+            const bg = this.add.rectangle(
+                startX + (index * spacing), 
+                startY, 
+                boxSize, 
+                boxSize, 
+                0x333333, 
+                0.8
+            ).setScrollFactor(0);
+            
+            // Create input indicators
+            const indicators = [];
+
+            if (inputState.up ) {
+                indicators.push(this.add.text(startX + (index * spacing), startY - 5, '↑', {
+                    fontSize: '12px',
+                    fill: '#00ff00',
+                    align: 'center'
+                }).setOrigin(0.5).setScrollFactor(0));
+            }
+            
+            if (inputState.down) {
+                indicators.push(this.add.text(startX + (index * spacing), startY + 5, '↓', {
+                    fontSize: '12px',
+                    fill: '#00ff00',
+                    align: 'center'
+                }).setOrigin(0.5).setScrollFactor(0));
+            }
+            
+            if (inputState.left) {
+                indicators.push(this.add.text(startX + (index * spacing) - 5, startY, '←', {
+                    fontSize: '12px',
+                    fill: '#00ff00',
+                    align: 'center'
+                }).setOrigin(0.5).setScrollFactor(0));
+            }
+            
+            if (inputState.right) {
+                indicators.push(this.add.text(startX + (index * spacing) + 5, startY, '→', {
+                    fontSize: '12px',
+                    fill: '#00ff00',
+                    align: 'center'
+                }).setOrigin(0.5).setScrollFactor(0));
+            }
+            
+            return {
+                background: bg,
+                arrows: indicators
+            };
+        }
+
+        updateQueueVisualization() {
+            // Clear existing indicators
+            this.queueIndicators.forEach(indicator => {
+                indicator.background.destroy();
+                indicator.arrows.forEach(arrow => arrow.destroy());
+            });
+            this.queueIndicators = [];
+            
+            // Create new indicators for current queue
+            const maxVisible = 15; // Show max 15 queued inputs
+            const queueToShow = this.inputQueue.slice(0, maxVisible);
+            
+            queueToShow.forEach((inputState, index) => {
+                // Only show non-empty inputs
+                if (inputState.up || inputState.down || inputState.left || inputState.right) {
+                    const indicator = this.createQueueIndicator(inputState, this.queueIndicators.length);
+                    this.queueIndicators.push(indicator);
+                }
+            });
+        }
+
+        setInputDelay(newDelay) {
+            this.inputDelay = newDelay;
+            this.delayText.setText(`Input Delay: ${this.inputDelay}s`);
+            // Clear the input queue when delay changes
+            this.inputQueue = [];
+            this.delayedInput = {
+                up: false,
+                down: false,
+                left: false,
+                right: false
+            };
+            this.previousInputState = {
+                up: false,
+                down: false,
+                left: false,
+                right: false
+            };
+            // Clear visual indicators
+            this.updateQueueVisualization();
+        }
+
+        captureCurrentInput() {
+            // Capture the current input state
+            const currentInputState = {
+                up: this.cursors.up.isDown || this.wasd.W.isDown || this.touchControls.up,
+                down: this.cursors.down.isDown || this.wasd.S.isDown || this.touchControls.down,
+                left: this.cursors.left.isDown || this.wasd.A.isDown || this.touchControls.left,
+                right: this.cursors.right.isDown || this.wasd.D.isDown || this.touchControls.right
+            };
+            
+            // Check if input state has changed
+            const hasChanged = 
+                currentInputState.up !== this.previousInputState.up ||
+                currentInputState.down !== this.previousInputState.down ||
+                currentInputState.left !== this.previousInputState.left ||
+                currentInputState.right !== this.previousInputState.right;
+            
+            // Only add to queue if there's a change
+            if (hasChanged) {
+                const inputState = {
+                    ...currentInputState,
+                    timestamp: this.time.now
+                };
+                this.inputQueue.push(inputState);
+            }
+            
+            // Update previous state for next frame
+            this.previousInputState = { ...currentInputState };
+        }
+
+        processDelayedInput() {
+            const currentTime = this.time.now;
+            const delayMs = this.inputDelay * 1000;
+            
+            // Process inputs that are old enough
+            while (this.inputQueue.length > 0) {
+                const queuedInput = this.inputQueue[0];
+                
+                if (currentTime - queuedInput.timestamp >= delayMs) {
+                    // This input is ready to be processed
+                    this.delayedInput = {
+                        up: queuedInput.up,
+                        down: queuedInput.down,
+                        left: queuedInput.left,
+                        right: queuedInput.right
+                    };
+                    this.inputQueue.shift(); // Remove processed input
+                } else {
+                    // No more inputs ready to process
+                    break;
+                }
+            }
+        }
+
+        update ()
+        {
+            if (!this.rover) return;
+
+            // Capture current input and add to queue
+            this.captureCurrentInput();
+            
+            // Update queue visualization immediately after capturing input
+            this.updateQueueVisualization();
+            
+            // Process delayed inputs
+            this.processDelayedInput();
+
+            // Handle rotation using delayed input
+            if (this.delayedInput.left) {
+                this.rover.setAngularVelocity(-this.roverRotationSpeed);
+            } else if (this.delayedInput.right) {
+                this.rover.setAngularVelocity(this.roverRotationSpeed);
+            } else {
+                this.rover.setAngularVelocity(0);
+            }
+
+            // Handle movement using delayed input - always at max speed
+            if (this.delayedInput.up) {
+                this.physics.velocityFromRotation(this.rover.rotation, this.roverSpeed, this.rover.body.velocity);
+            } else if (this.delayedInput.down) {
+                this.physics.velocityFromRotation(this.rover.rotation, -this.roverSpeed * 0.5, this.rover.body.velocity);
+            } else {
+                this.rover.setVelocity(0, 0);
+            }
+        }
+    }
+
+    const config = {
+        type: Phaser.AUTO,
+        width: Math.min(800, window.innerWidth - 20),
+        height: Math.min(600, window.innerHeight - 20),
+        scene: MarsRoverGame,
+        physics: {
+            default: 'arcade',
+            arcade: {
+                gravity: { y: 0 },
+                debug: false
+            }
+        },
+        scale: {
+            mode: Phaser.Scale.FIT,
+            autoCenter: Phaser.Scale.CENTER_BOTH
+        }
+    };
+
+    const game = new Phaser.Game(config);
+    </script>
+
+</body>
+</html>
