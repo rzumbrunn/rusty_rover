@@ -4,7 +4,8 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Rusty Rover</title>
-    <script src="/rusty-rover/src/phaser.js"></script>
+    <!-- <script src="/rusty-rover/src/phaser.js"></script> -->
+    <script src="/src/phaser.js"></script>
     <style>
         body {
             margin: 0;
@@ -20,7 +21,8 @@
             border-radius: 8px;
         }
     </style>
-    <link rel="manifest" href="/rusty-rover/src/static/manifest.json">
+    <!-- <link rel="manifest" href="/rusty-rover/src/static/manifest.json"> -->
+    <link rel="manifest" href="/src/static/manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
 </head>
 <body>
@@ -166,9 +168,9 @@
             this.rocksPerSpawn = 4; // Rocks to spawn per check
             
             // Timer and game state
-            this.gameDuration = 60000; // 60 seconds in milliseconds
+            this.gameDuration = 6000; // 60 seconds in milliseconds
             this.startTime = null;
-            this.timeRemaining = 60;
+            this.timeRemaining = 6;
             this.gameActive = true;
             
             // Mobile scoreboard system
@@ -900,7 +902,7 @@
                 strokeThickness: 2
             }).setOrigin(0.5);
             
-            // Name display
+            // Name display - make it interactive to trigger keyboard
             const nameDisplay = this.add.text(0, height * 0.05, this.nameInputText || 'TAP TO ENTER NAME', {
                 fontSize: String(18*window.devicePixelRatio)+"px",
                 fill: '#00ff00',
@@ -910,8 +912,9 @@
                 padding: { x: 10, y: 5 }
             }).setOrigin(0.5);
             
-            // Mobile keyboard buttons
-            this.createMobileKeyboard();
+            // Make name display interactive to trigger mobile keyboard
+            nameDisplay.setInteractive();
+            nameDisplay.on('pointerdown', () => this.showMobileKeyboard());
             
             // Submit button
             const submitBtn = this.add.rectangle(0, height * 0.25, 200*window.devicePixelRatio, 50*window.devicePixelRatio, 0x00aa00);
@@ -971,50 +974,57 @@
             this.setupDesktopInput();
         }
 
-        createMobileKeyboard() {
-            const { width, height } = this.sys.game.config;
-            const keys = [
-                ['Q','W','E','R','T','Y','U','I','O','P'],
-                ['A','S','D','F','G','H','J','K','L'],
-                ['Z','X','C','V','B','N','M','⌫']
-            ];
+        showMobileKeyboard() {
+            // Create a temporary HTML input element to trigger native keyboard
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.maxLength = 10;
+            input.value = this.nameInputText;
+            input.placeholder = 'Enter your name';
             
-            const keyWidth = 25*window.devicePixelRatio;
-            const keyHeight = 30*window.devicePixelRatio;
-            const keySpacing = 2*window.devicePixelRatio;
+            // Style the input to be invisible but still functional
+            input.style.position = 'absolute';
+            input.style.left = '-9999px';
+            input.style.top = '-9999px';
+            input.style.opacity = '0';
+            input.style.pointerEvents = 'none';
             
-            keys.forEach((row, rowIndex) => {
-                const rowWidth = row.length * keyWidth + (row.length - 1) * keySpacing;
-                const startX = -rowWidth / 2 + keyWidth / 2;
-                const y = height * 0.12 + rowIndex * (keyHeight + keySpacing);
-                
-                row.forEach((key, keyIndex) => {
-                    const x = startX + keyIndex * (keyWidth + keySpacing);
-                    
-                    const keyBg = this.add.rectangle(x, y, keyWidth, keyHeight, 0x444444);
-                    keyBg.setStrokeStyle(1, 0x666666);
-                    
-                    const keyText = this.add.text(x, y, key, {
-                        fontSize: String(12*window.devicePixelRatio)+"px",
-                        fill: '#ffffff'
-                    }).setOrigin(0.5);
-                    
-                    keyBg.setInteractive();
-                    keyBg.on('pointerdown', () => this.handleMobileKeyPress(key));
-                    
-                    this.gameOverModal.add([keyBg, keyText]);
-                });
+            // Add to DOM and focus to trigger keyboard
+            document.body.appendChild(input);
+            
+            // Small delay to ensure input is in DOM before focusing
+            setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 50);
+            
+            // Handle input changes
+            input.addEventListener('input', (event) => {
+                this.nameInputText = event.target.value.toUpperCase();
+                this.nameDisplayText.setText(this.nameInputText || 'TAP TO ENTER NAME');
             });
-        }
-
-        handleMobileKeyPress(key) {
-            if (key === '⌫') {
-                this.nameInputText = this.nameInputText.slice(0, -1);
-            } else if (this.nameInputText.length < 10) {
-                this.nameInputText += key;
-            }
             
-            this.nameDisplayText.setText(this.nameInputText || 'TAP TO ENTER NAME');
+            // Handle when user finishes (blur, enter, or done button)
+            const finishInput = () => {
+                document.body.removeChild(input);
+                this.nameDisplayText.setText(this.nameInputText || 'TAP TO ENTER NAME');
+            };
+            
+            input.addEventListener('blur', finishInput);
+            input.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                    finishInput();
+                    // Optionally auto-submit on Enter
+                    // this.submitScore();
+                }
+            });
+            
+            // Auto-cleanup after 30 seconds to prevent memory leaks
+            setTimeout(() => {
+                if (document.body.contains(input)) {
+                    finishInput();
+                }
+            }, 30000);
         }
 
         setupDesktopInput() {
@@ -1117,14 +1127,14 @@
             default: 'matter',
             matter: {
                 gravity: { x: 0, y: 0, scale: 0 }, // No gravity for top-down Mars rover
-                // debug: {
-                //     showBody: true,
-                //     showStaticBody: true,
-                //     showVelocity: true,
-                //     bodyDebugColor: 0xff00ff,
-                //     staticBodyDebugColor: 0x0000ff,
-                //     velocityDebugColor: 0x00ff00
-                // }
+                debug: {
+                    showBody: true,
+                    showStaticBody: true,
+                    showVelocity: true,
+                    bodyDebugColor: 0xff00ff,
+                    staticBodyDebugColor: 0x0000ff,
+                    velocityDebugColor: 0x00ff00
+                }
             }
         },
         scale: {
