@@ -1,10 +1,40 @@
 {
+    "name": "Rusty Rover - Mars Sample Collector",
+    "short_name": "Rusty Rover",
+    "description": "Drive a Mars rover to collect samples in this exciting 60-second challenge game!",
+    "start_url": "/rusty-rover/",
+    "scope": "/rusty-rover/",
+    "display": "fullscreen",
     "orientation": "landscape",
-    "background_color": "#000000",
-    "theme_color": "#000000",
-    "display": "standalone",
-    "start_url": "/rusty_rover/",
-    "name": "Rusty Rover",
-    "short_name": "RustyRover",
-    "scope" : "/rusty_rover/"
+    "background_color": "#2c1810",
+    "theme_color": "#8B4513",
+    "categories": ["games", "entertainment"],
+    "lang": "en",
+    "dir": "ltr",
+    "icons": [
+        {
+            "src": "rover.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Play Game",
+            "short_name": "Play",
+            "description": "Start playing Rusty Rover immediately",
+            "url": "/rusty-rover/",
+            "icons": [
+                {
+                    "src": "rover.svg",
+                    "sizes": "96x96"
+                }
+            ]
+        }
+    ],
+    "prefer_related_applications": false,
+    "edge_side_panel": {
+        "preferred_width": 400
+    }
 }
