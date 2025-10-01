@@ -28,20 +28,20 @@ def update_scores(name, score, planet):
 
 
 
-@app.route('/rusty-rover/')
+@app.route('/')
 def serve_index():
     return send_from_directory(app.static_folder, 'main.html')
-@app.route('/rusty-rover/src/<path:path>')
+@app.route('/src/<path:path>')
 def serve_static(path):
     return send_from_directory(app.static_folder, path)
-@app.route('/rusty-rover/scores')
+@app.route('/scores')
 def serve_scoreboard():
     # sort scores
     global scores
     scores = sorted(scores, key=lambda x: x["score"], reverse=True)
     return render_template('scores.html', scores=scores)
 
-@app.route('/rusty-rover/api/send_score', methods=['POST'])
+@app.route('/api/send_score', methods=['POST'])
 def receive_score():
     data = request.json
     score = data.get('score')
@@ -55,4 +55,4 @@ def receive_score():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5511)
