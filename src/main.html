@@ -3,8 +3,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Mars Rover Sample Collector</title>
-    <script src="phaser.js"></script>
+    <title>Rusty Rover</title>
+    <script src="/rusty-rover/src/phaser.js"></script>
     <style>
         body {
             margin: 0;
@@ -20,16 +20,100 @@
             border-radius: 8px;
         }
     </style>
-    <link rel="manifest" href="static/manifest.json">
+    <link rel="manifest" href="/rusty-rover/src/static/manifest.json">
     <meta name="mobile-web-app-capable" content="yes">
 </head>
 <body>
 
     <script>
+    let params = new URLSearchParams(document.location.search);
+    let real_delays = params.get('real_delays')
+    if(real_delays == "true"){
+        var planetDelays = [
+            0,
+            1.3,
+            182,
+            241.9 * 60
+        ]
+    }
+    else{
+        var planetDelays = [
+            0,
+            0.5,
+            1.5,
+            5
+        ]
+
+    }
+
+    // planets delays
+    const planets = [
+        "Earth",
+        "Moon",
+        "Mars",
+        "Neptune"
+    ]
+    const planetColors = [
+        0x3d8048,
+        0x999999,
+        0xebac59,
+        0x9ad7e3
+    ]
+
+    class StartScreen extends Phaser.Scene
+    {
+        constructor() {
+            super({ key: 'StartScreen' });
+        }
+
+        preload() {
+            // Load any assets for the start screen if needed
+        }
+
+        create() {
+            const { width, height } = this.sys.game.config;
+            let title_fontsize = String(48*window.devicePixelRatio)+"px";
+            let instruction_fontsize = String(24*window.devicePixelRatio)+"px";
+
+            this.add.text(width / 2, height / 2 - 100*window.devicePixelRatio, 'Rover Sample Collector', {
+                fontSize: title_fontsize,
+                fill: '#ffffff',
+                stroke: '#000000',
+                strokeThickness: 4
+            }).setOrigin(0.5);
+
+            this.add.text(width / 2, height / 2, 'Use Arrow Keys or WASD to move the rover', {
+                fontSize: instruction_fontsize,
+                fill: '#ffffff',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0.5);
+
+            this.add.text(width / 2, height / 2 + 50*window.devicePixelRatio, 'Press any key to start', {
+                fontSize: instruction_fontsize,
+                fill: '#ffff00',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0.5);
+
+            this.input.keyboard.once('keydown', () => {
+                this.scene.start('MarsRoverGame');
+            });
+
+            // Also allow touch to start
+            this.input.on('pointerdown', () => {
+                this.scene.start('MarsRoverGame');
+            });
+        }
+    }
+
     class MarsRoverGame extends Phaser.Scene
     {
         constructor() {
-            super({ key: 'MarsRoverGame' });
+            super({ 
+                key: 'MarsRoverGame' ,
+                active: false
+            });
             this.rover = null;
             this.samples = null;
             this.cursors = null;
@@ -42,7 +126,7 @@
                 left: false,
                 right: false
             };
-            this.roverSpeed = 5;
+            this.roverSpeed = 5*window.devicePixelRatio; // Speed for direct velocity setting (pixels/frame)
             this.roverRotationSpeed = .05; // Angular velocity for Matter.js rotation (rad/s)
             this.roverForce = 0.005; // Force for Matter.js movement
             this.roverTorque = 2; // Torque for Matter.js rotation
@@ -66,12 +150,75 @@
             // Visual queue indicator
             this.queueIndicators = [];
             this.queueContainer = null;
+
+            // chunk loading logic
+            this.farDistance = 2*Math.max(window.innerWidth, window.innerHeight)*window.devicePixelRatio;
+            
+            // Dynamic world management - optimized for performance
+            this.rocks = null; // Group for terrain rocks
+            this.loadDistance = this.farDistance * 0.6; // Distance to start loading objects
+            this.unloadDistance = this.farDistance * 1.0; // Distance to unload objects
+            this.spawnCheckInterval = 1000; // ms between spawn checks (reduced frequency)
+            this.lastSpawnCheck = 0;
+            this.maxSamplesInWorld = 25; // Maximum samples to keep loaded
+            this.maxRocksInWorld = 50; // Maximum rocks to keep loaded
+            this.samplesPerSpawn = 2; // Samples to spawn per check
+            this.rocksPerSpawn = 4; // Rocks to spawn per check
+            
+            // Timer and game state
+            this.gameDuration = 60000; // 60 seconds in milliseconds
+            this.startTime = null;
+            this.timeRemaining = 60;
+            this.gameActive = true;
+            
+            // Mobile scoreboard system
+            this.gameOverModal = null;
+            this.nameInputText = '';
+            this.mobileKeyboard = null;
+            this.scoreboardVisible = false;
+        }
+
+        init() {
+            // Reset game state on scene restart
+            this.gameActive = true;
+            this.scoreboardVisible = false;
+            this.startTime = null;
+            this.timeRemaining = 60;
+            this.score = 0;
+            this.nameInputText = '';
+            this.gameOverModal = null;
+            this.gameOverInputHandler = null;
+            
+            // Reset input states
+            this.delayedInput = {
+                up: false,
+                down: false,
+                left: false,
+                right: false
+            };
+            this.previousInputState = {
+                up: false,
+                down: false,
+                left: false,
+                right: false
+            };
+            this.inputQueue = [];
+            this.queueIndicators = [];
+
+            // regenerate planet
+            this.planet_nr = Phaser.Math.Between(0, planets.length - 1);
+            this.planet_color = planetColors[this.planet_nr];
+            this.planet_delay = planetDelays[this.planet_nr];
+            this.planet_name = planets[this.planet_nr];
+
+            
         }
 
         preload ()
         {
             // Create simple colored rectangles as placeholders for sprites
             this.load.image('mars-bg', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==');
+
             
             // Create rover sprite (simple rectangle)
             // this.add.graphics()
@@ -80,7 +227,8 @@
             //     .generateTexture('rover', 40, 20);
 
             //Create rover sprite from svg
-            this.load.svg('rover', 'static/rover.svg', { width: 90*window.devicePixelRatio, height: 120*window.devicePixelRatio });
+            this.load.svg('rover', '/rusty-rover/src/static/rover.svg', { width: 90*window.devicePixelRatio, height: 120*window.devicePixelRatio });
+            this.load.svg('alien', '/rusty-rover/src/static/alien.svg', { width: 90*window.devicePixelRatio, height: 120*window.devicePixelRatio });
 
             
             // Create sample sprite (small circle)
@@ -92,9 +240,15 @@
 
         create ()
         {
-            // Mars terrain background
+            //select random planet to land on
+            this.planet_nr = Phaser.Math.Between(0, planets.length - 1);
+            this.planet_color = planetColors[this.planet_nr];
+            this.planet_delay = planetDelays[this.planet_nr];
+            this.planet_name = planets[this.planet_nr];
+
+            // planet bg
             let world_extent = 20;
-            this.add.rectangle(0, 0, this.cameras.main.width * world_extent, this.cameras.main.height * world_extent, 0xCD853F);
+            this.add.rectangle(0, 0, this.cameras.main.width * world_extent, this.cameras.main.height * world_extent, this.planet_color);
 
             //Make world large
             // this.game.world.setBounds(0,0,1600,1200);
@@ -111,6 +265,8 @@
             this.rover = this.add.sprite(400, 300, 'rover');
             this.matter.add.gameObject(this.rover);
             
+
+            
             // Configure Matter.js body for the rover - no momentum settings
             this.rover.setRectangle(this.rover.width, this.rover.height); // Set collision shape as rectangle
             this.rover.setFrictionAir(0); // No air resistance for instant movement
@@ -120,7 +276,12 @@
 
             // Create sample group
             this.samples = this.add.group();
-            this.spawnSamples();
+            
+            // Create rocks group for dynamic terrain
+            this.rocks = this.add.group();
+            
+            this.spawnSamplesBegin();
+            this.spawnInitialRocks();
 
             // Setup keyboard controls
             this.cursors = this.input.keyboard.createCursorKeys();
@@ -151,6 +312,9 @@
                     }
                 }
             });
+            // start timer
+            this.startTime = this.time.now;
+
 
             // Setup camera to follow rover
             this.cameras.main.startFollow(this.rover);
@@ -176,8 +340,23 @@
             });
             this.delayText.setScrollFactor(0);
 
+            // Add object count indicator for debugging
+            // this.objectCountText = this.add.text(16, 16 + 48*window.devicePixelRatio, 'Objects: S:0 R:0', {
+            //     fontSize: ui_fontsize,
+            //     fill: '#00ffff',
+            //     strokeThickness: 1
+            // });
+            // this.objectCountText.setScrollFactor(0);
+            this.objectCountText = this.add.text(16, 16 + 48*window.devicePixelRatio, 'Time remaining: 60s', {
+                fontSize: ui_fontsize,
+                fill: '#00ffff',
+                strokeThickness: 1
+            });
+            this.objectCountText.setScrollFactor(0);
+
+
             // Create queue visualization
-            this.queueTitle = this.add.text(16, 16 + 48*window.devicePixelRatio, 'Input Queue:', {
+            this.queueTitle = this.add.text(16, 16 + 72*window.devicePixelRatio, 'Input Queue:', {
                 fontSize: ui_fontsize,
                 fill: '#00ff00',
                 // stroke: '#000000',
@@ -186,38 +365,56 @@
             this.queueTitle.setScrollFactor(0);
 
             // Add delay adjustment controls (1-5 keys)
-            this.input.keyboard.on('keydown-ONE', () => this.setInputDelay(0.1));
-            this.input.keyboard.on('keydown-TWO', () => this.setInputDelay(0.3));
-            this.input.keyboard.on('keydown-THREE', () => this.setInputDelay(0.5));
-            this.input.keyboard.on('keydown-FOUR', () => this.setInputDelay(1.0));
-            this.input.keyboard.on('keydown-FIVE', () => this.setInputDelay(2.0));
+            // this.input.keyboard.on('keydown-ONE', () => this.setInputDelay(0.1));
+            // this.input.keyboard.on('keydown-TWO', () => this.setInputDelay(0.3));
+            // this.input.keyboard.on('keydown-THREE', () => this.setInputDelay(0.5));
+            // this.input.keyboard.on('keydown-FOUR', () => this.setInputDelay(1.0));
+            // this.input.keyboard.on('keydown-FIVE', () => this.setInputDelay(2.0));
+            this.setInputDelay(this.planet_delay)
 
             // Setup mobile controls
             this.setupMobileControls();
+            this.gameActive = true;
         }
 
-        spawnSamples() {
+        spawnSamplesBegin() {
             for (let i = 0; i < 15; i++) {
-                let x = Phaser.Math.Between(50, this.cameras.main.width*2 - 50);
-                let y = Phaser.Math.Between(50, this.cameras.main.height*2 - 50);
-                
+                // let x = Phaser.Math.Between(50, farDistance - 50);
+                // let y = Phaser.Math.Between(50, farDistance - 50);
+                let x_center = this.cameras.main.width*window.devicePixelRatio / 2;
+                let y_center = this.cameras.main.height*window.devicePixelRatio / 2;
+                let x = Phaser.Math.Between(-this.farDistance/2 + x_center, this.farDistance/2 + x_center);
+                let y = Phaser.Math.Between(-this.farDistance/2 + y_center, this.farDistance/2 + y_center);
+
                 // Make sure samples don't spawn too close to rover
                 while (Phaser.Math.Distance.Between(x, y, 400, 300) < 100) {
                     x = Phaser.Math.Between(50, this.cameras.main.width - 50);
                     y = Phaser.Math.Between(50, this.cameras.main.height - 50);
                 }
-                
-                let sample = this.add.sprite(x, y, 'sample');
-                this.matter.add.gameObject(sample);
-                this.samples.add(sample);
-                
-                // Configure Matter.js body for samples
-                sample.setCircle(8); // Circular collision shape with radius 8
-                sample.setStatic(true); // Samples don't move
-                sample.setSensor(true); // Samples are sensors (trigger collision events but don't physically collide)
-                
-                // Add custom properties for identification
-                sample.sampleId = i;
+                this.spawnSample(x, y);
+            }
+        }
+        spawnSample(x, y) {
+            let sample = this.add.sprite(x, y, 'sample');
+            this.matter.add.gameObject(sample);
+            this.samples.add(sample);
+            
+            // Configure Matter.js body for samples
+            sample.setCircle(8*window.devicePixelRatio); // Circular collision shape with radius 8
+            sample.setStatic(true); // Samples don't move
+            sample.setSensor(true); // Samples are sensors (trigger collision events but don't physically collide)
+
+            // add listener to remove if sample is too far away
+            
+            // Add custom properties for identification
+            sample.sampleId = Phaser.Math.Between(1000, 9999); // Unique ID
+        }
+        spawnSamplesMidGame(){
+            // spawn samples slightly outside current view
+            for (let i = 0; i < 5; i++) {
+                let x = Phaser.Math.Between(this.cameras.main.scrollX - 100, this.cameras.main.scrollX + this.cameras.main.width + 100);
+                let y = Phaser.Math.Between(this.cameras.main.scrollY - 100, this.cameras.main.scrollY + this.cameras.main.height + 100);
+                this.spawnSample(x, y);
             }
         }
 
@@ -232,12 +429,147 @@
             let newSample = this.add.sprite(x, y, 'sample');
             this.matter.add.gameObject(newSample);
             this.samples.add(newSample);
-            // Configure Matter.js body foru new sample
+            // Configure Matter.js body for new sample
             newSample.setCircle(8*window.devicePixelRatio);
             newSample.setStatic(true);
             newSample.setSensor(true);
             newSample.sampleId = this.score + 15; // Unique ID
         }
+
+        // Rock spawning functions for dynamic terrain
+        spawnInitialRocks() {
+            // Spawn initial rocks around the starting area
+            let x_center = this.cameras.main.width*window.devicePixelRatio / 2;
+            let y_center = this.cameras.main.height*window.devicePixelRatio / 2;
+            
+            for (let i = 0; i < 25; i++) {
+                let x = Phaser.Math.Between(-this.farDistance/2 + x_center, this.farDistance/2 + x_center);
+                let y = Phaser.Math.Between(-this.farDistance/2 + y_center, this.farDistance/2 + y_center);
+                
+                // Don't spawn too close to rover
+                if (Phaser.Math.Distance.Between(x, y, 400, 300) > 150) {
+                    this.spawnRock(x, y);
+                }
+            }
+        }
+
+        spawnRock(x, y) {
+            // Create a rock sprite using a circle (since we don't have rock sprites)
+            let size = Phaser.Math.Between(8, 20) * window.devicePixelRatio;
+            // randomly spawn an alien
+            if (Math.random()<0.04){
+                var rock = this.add.sprite(x, y, 'alien');
+            }
+            else{
+
+                var rock = this.add.circle(x, y, size, 0x8B4513); // Brown color for rocks
+            }
+            this.matter.add.gameObject(rock);
+            this.rocks.add(rock);
+            // Configure Matter.js body for rocks
+            rock.setCircle(size);
+            rock.setStatic(true);
+            rock.setSensor(false); // Rocks are solid obstacles
+            rock.setFriction(0.8);
+            rock.setBounce(0.1);
+
+            
+            // Add custom properties
+            rock.rockId = Phaser.Math.Between(10000, 99999);
+
+        }
+
+        spawnRocksAroundRover() {
+            // Spawn rocks in a ring around the rover's current position
+            let roverX = this.rover.x;
+            let roverY = this.rover.y;
+            
+            for (let i = 0; i < this.rocksPerSpawn; i++) {
+                // Random angle and distance for spawning
+                let angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+                let distance = Phaser.Math.FloatBetween(this.loadDistance * 0.7, this.loadDistance);
+                
+                let x = roverX + Math.cos(angle) * distance;
+                let y = roverY + Math.sin(angle) * distance;
+                
+                this.spawnRock(x, y);
+            }
+        }
+
+        // Distance-based cleanup system
+        cleanupDistantObjects() {
+            let roverX = this.rover.x;
+            let roverY = this.rover.y;
+            
+            // Clean up distant samples
+            this.samples.children.entries.forEach(sample => {
+                let distance = Phaser.Math.Distance.Between(roverX, roverY, sample.x, sample.y);
+                if (distance > this.unloadDistance) {
+                    sample.destroy();
+                }
+            });
+            
+            // Clean up distant rocks
+            this.rocks.children.entries.forEach(rock => {
+                let distance = Phaser.Math.Distance.Between(roverX, roverY, rock.x, rock.y);
+                if (distance > this.unloadDistance) {
+                    rock.destroy();
+                }
+            });
+        }
+
+        // Continuous spawning system
+        spawnSamplesAroundRover() {
+            // Only spawn if we're below the max limit
+            if (this.samples.children.entries.length >= this.maxSamplesInWorld) {
+                return;
+            }
+            
+            let roverX = this.rover.x;
+            let roverY = this.rover.y;
+            
+            for (let i = 0; i < this.samplesPerSpawn; i++) {
+                // Random angle and distance for spawning
+                let angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+                let distance = Phaser.Math.FloatBetween(this.loadDistance * 0.5, this.loadDistance * 0.8);
+                
+                let x = roverX + Math.cos(angle) * distance;
+                let y = roverY + Math.sin(angle) * distance;
+                
+                // Don't spawn too close to rover
+                if (distance > 200) {
+                    this.spawnSample(x, y);
+                }
+            }
+        }
+
+        manageWorldObjects() {
+            // Check if enough time has passed since last spawn check
+            let currentTime = this.time.now;
+            if (currentTime - this.lastSpawnCheck < this.spawnCheckInterval) {
+                return;
+            }
+            
+            this.lastSpawnCheck = currentTime;
+            
+            // Clean up distant objects
+            this.cleanupDistantObjects();
+            
+            // Spawn new objects if needed
+            if (this.samples.children.entries.length < this.maxSamplesInWorld) {
+                this.spawnSamplesAroundRover();
+            }
+            
+            if (this.rocks.children.entries.length < this.maxRocksInWorld) {
+                this.spawnRocksAroundRover();
+            }
+            
+            // Update debug info
+            let sampleCount = this.samples.children.entries.length;
+            let rockCount = this.rocks.children.entries.length;
+            this.objectCountText.setText(`Objects: S:${sampleCount} R:${rockCount}`);
+        }
+
         setupMobileControls() {
             // Create virtual D-pad for mobile
             if (this.sys.game.device.input.touch) {
@@ -289,7 +621,7 @@
         }
 
         createQueueIndicator(inputState, index) {
-            const startX = 150*window.devicePixelRatio;
+            const startX = 200*window.devicePixelRatio;
             const startY = 85*window.devicePixelRatio;
             const boxSize = 20*window.devicePixelRatio;
             const spacing = 25*window.devicePixelRatio;
@@ -445,6 +777,27 @@
         {
             if (!this.rover) return;
 
+            // Check timer and update display
+            if (this.gameActive && this.startTime) {
+                let elapsed = this.time.now - this.startTime;
+                this.timeRemaining = Math.max(0, Math.ceil((this.gameDuration - elapsed) / 1000));
+                this.objectCountText.setText(`Time: ${this.timeRemaining}s`);
+                
+                // Check if time is up
+                if (this.timeRemaining <= 0) {
+                    this.endGame();
+                    return; // Stop processing input when game ends
+                }
+            }
+
+            // Return early if scoreboard is visible
+            if (this.scoreboardVisible) {
+                return;
+            }
+
+            // Manage dynamic world objects (spawn/despawn)
+            this.manageWorldObjects();
+
             // Capture current input and add to queue
             this.captureCurrentInput();
             
@@ -478,6 +831,279 @@
                 // Stop immediately when no input
                 this.rover.setVelocity(0, 0);
             }
+
+        }
+
+        endGame() {
+            this.gameActive = false;
+            
+            // Stop rover movement
+            this.rover.setVelocity(0, 0);
+            this.rover.setAngularVelocity(0);
+            
+            // Show mobile-friendly scoreboard
+            this.showMobileScoreboard();
+        }
+
+        showMobileScoreboard() {
+            this.scoreboardVisible = true;
+            const { width, height } = this.sys.game.config;
+            
+            // Create semi-transparent overlay
+            const overlay = this.add.rectangle(-2*width, -2*height, width * 2, height * 2, 0x000000, 0.8);
+            overlay.setScrollFactor(0);
+            overlay.setOrigin(0, 0);
+            
+            // Create modal container
+            this.gameOverModal = this.add.container(width / 2, height / 2);
+            this.gameOverModal.setScrollFactor(0);
+            
+            // Modal background
+            const modalBg = this.add.rectangle(0, 0, width * 0.9, height * 0.8, 0x333333, 0.95);
+            modalBg.setStrokeStyle(4, 0x666666);
+            
+            // Game Over title
+            const titleText = this.add.text(0, -height * 0.3, 'GAME OVER', {
+                fontSize: String(36*window.devicePixelRatio)+"px",
+                fill: '#ff0000',
+                stroke: '#000000',
+                strokeThickness: 4
+            }).setOrigin(0.5);
+            
+            // Final score
+            const scoreText = this.add.text(0, -height * 0.2, `Final Score: ${this.score}`, {
+                fontSize: String(28*window.devicePixelRatio)+"px",
+                fill: '#ffffff',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0.5);
+            
+            // Add elements to modal
+            this.gameOverModal.add([modalBg, titleText, scoreText]);
+            
+            // Show leaderboard or name entry based on device
+            if (this.sys.game.device.input.touch) {
+                this.showMobileNameEntry();
+            } else {
+                this.showDesktopNameEntry();
+            }
+        }
+
+        showMobileNameEntry() {
+            const { height } = this.sys.game.config;
+            
+            // Instructions for mobile
+            const instructionText = this.add.text(0, -height * 0.05, 'Enter your name:', {
+                fontSize: String(20*window.devicePixelRatio)+"px",
+                fill: '#ffff00',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0.5);
+            
+            // Name display
+            const nameDisplay = this.add.text(0, height * 0.05, this.nameInputText || 'TAP TO ENTER NAME', {
+                fontSize: String(18*window.devicePixelRatio)+"px",
+                fill: '#00ff00',
+                stroke: '#000000',
+                strokeThickness: 2,
+                backgroundColor: '#222222',
+                padding: { x: 10, y: 5 }
+            }).setOrigin(0.5);
+            
+            // Mobile keyboard buttons
+            this.createMobileKeyboard();
+            
+            // Submit button
+            const submitBtn = this.add.rectangle(0, height * 0.25, 200*window.devicePixelRatio, 50*window.devicePixelRatio, 0x00aa00);
+            const submitText = this.add.text(0, height * 0.25, 'SUBMIT SCORE', {
+                fontSize: String(16*window.devicePixelRatio)+"px",
+                fill: '#ffffff',
+                fontWeight: 'bold'
+            }).setOrigin(0.5);
+            
+            submitBtn.setInteractive();
+            submitBtn.on('pointerdown', () => this.submitScore());
+            
+            // Restart button  
+            const restartBtn = this.add.rectangle(0, height * 0.32, 200*window.devicePixelRatio, 40*window.devicePixelRatio, 0x0066aa);
+            const restartText = this.add.text(0, height * 0.32, 'PLAY AGAIN', {
+                fontSize: String(14*window.devicePixelRatio)+"px",
+                fill: '#ffffff'
+            }).setOrigin(0.5);
+            
+            restartBtn.setInteractive();
+            restartBtn.on('pointerdown', () => this.restartGame());
+            
+            this.gameOverModal.add([instructionText, nameDisplay, submitBtn, submitText, restartBtn, restartText]);
+            this.nameDisplayText = nameDisplay;
+        }
+
+        showDesktopNameEntry() {
+            const { height } = this.sys.game.config;
+            
+            // Instructions for desktop
+            const instructionText = this.add.text(0, -height * 0.05, 'Type your name, then press ENTER', {
+                fontSize: String(18*window.devicePixelRatio)+"px",
+                fill: '#ffff00',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0.5);
+            
+            // Name display
+            const nameDisplay = this.add.text(0, height * 0.05, '_____', {
+                fontSize: String(18*window.devicePixelRatio)+"px",
+                fill: '#00ff00',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0.5);
+            
+            const restartText = this.add.text(0, height * 0.15, 'Press SPACE to play again', {
+                fontSize: String(16*window.devicePixelRatio)+"px",
+                fill: '#ffffff',
+                stroke: '#000000',
+                strokeThickness: 1
+            }).setOrigin(0.5);
+            
+            this.gameOverModal.add([instructionText, nameDisplay, restartText]);
+            this.nameDisplayText = nameDisplay;
+            
+            // Setup keyboard input for desktop
+            this.setupDesktopInput();
+        }
+
+        createMobileKeyboard() {
+            const { width, height } = this.sys.game.config;
+            const keys = [
+                ['Q','W','E','R','T','Y','U','I','O','P'],
+                ['A','S','D','F','G','H','J','K','L'],
+                ['Z','X','C','V','B','N','M','⌫']
+            ];
+            
+            const keyWidth = 25*window.devicePixelRatio;
+            const keyHeight = 30*window.devicePixelRatio;
+            const keySpacing = 2*window.devicePixelRatio;
+            
+            keys.forEach((row, rowIndex) => {
+                const rowWidth = row.length * keyWidth + (row.length - 1) * keySpacing;
+                const startX = -rowWidth / 2 + keyWidth / 2;
+                const y = height * 0.12 + rowIndex * (keyHeight + keySpacing);
+                
+                row.forEach((key, keyIndex) => {
+                    const x = startX + keyIndex * (keyWidth + keySpacing);
+                    
+                    const keyBg = this.add.rectangle(x, y, keyWidth, keyHeight, 0x444444);
+                    keyBg.setStrokeStyle(1, 0x666666);
+                    
+                    const keyText = this.add.text(x, y, key, {
+                        fontSize: String(12*window.devicePixelRatio)+"px",
+                        fill: '#ffffff'
+                    }).setOrigin(0.5);
+                    
+                    keyBg.setInteractive();
+                    keyBg.on('pointerdown', () => this.handleMobileKeyPress(key));
+                    
+                    this.gameOverModal.add([keyBg, keyText]);
+                });
+            });
+        }
+
+        handleMobileKeyPress(key) {
+            if (key === '⌫') {
+                this.nameInputText = this.nameInputText.slice(0, -1);
+            } else if (this.nameInputText.length < 10) {
+                this.nameInputText += key;
+            }
+            
+            this.nameDisplayText.setText(this.nameInputText || 'TAP TO ENTER NAME');
+        }
+
+        setupDesktopInput() {
+            // Store reference to the handler so we can remove it later
+            this.gameOverInputHandler = (event) => {
+                // Only process if scoreboard is visible and game is not active
+                if (!this.scoreboardVisible || this.gameActive) return;
+                
+                if (event.keyCode === 13) { // ENTER
+                    this.submitScore();
+                } else if (event.keyCode === 32) { // SPACE
+                    this.restartGame();
+                } else if (event.keyCode === 8) { // BACKSPACE
+                    this.nameInputText = this.nameInputText.slice(0, -1);
+                    this.updateDesktopNameDisplay();
+                } else if (event.key.length === 1 && this.nameInputText.length < 10) {
+                    this.nameInputText += event.key.toUpperCase();
+                    this.updateDesktopNameDisplay();
+                }
+            };
+            
+            this.input.keyboard.on('keydown', this.gameOverInputHandler);
+        }
+
+        updateDesktopNameDisplay() {
+            const displayName = this.nameInputText.padEnd(5, '_');
+            this.nameDisplayText.setText(displayName);
+        }
+
+        submitScore() {
+            const finalName = this.nameInputText.trim() || 'ANONYMOUS';
+            this.saveToLeaderboard(finalName, this.score);
+            
+            this.nameDisplayText.setText('SAVED!');
+            this.time.delayedCall(1500, () => {
+                this.restartGame();
+            });
+        }
+
+        saveToLeaderboard(name, score) {
+            let leaderboard = JSON.parse(localStorage.getItem('marsRoverLeaderboard') || '[]');
+            
+            leaderboard.push({
+                name: name,
+                score: score,
+                date: new Date().toLocaleDateString()
+            });
+            
+            leaderboard.sort((a, b) => b.score - a.score);
+            leaderboard = leaderboard.slice(0, 10);
+            
+            localStorage.setItem('marsRoverLeaderboard', JSON.stringify(leaderboard));
+            //send to backend /rusty-rover/api/send_score
+            fetch('/rusty-rover/api/send_score', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name: name, score: score , planet: this.planet_name})
+            }).then(response => {
+                if (!response.ok) {
+                    console.error('Failed to send score to backend');
+                }
+            }).catch(error => {
+                console.error('Error sending score to backend:', error);
+            });
+
+        }
+
+        restartGame() {
+            // Remove the game over input handler if it exists
+            if (this.gameOverInputHandler) {
+                this.input.keyboard.off('keydown', this.gameOverInputHandler);
+                this.gameOverInputHandler = null;
+            }
+            
+            // Reset all game state variables
+            this.gameActive = true;
+            this.scoreboardVisible = false;
+            this.startTime = null;
+            this.timeRemaining = 60;
+            this.score = 0;
+            this.nameInputText = '';
+            this.gameOverModal = null;
+            
+            // Restart the current scene
+            this.scene.restart();
+
+
         }
     }
 
@@ -485,25 +1111,32 @@
         type: Phaser.AUTO,
         width: (window.innerWidth - 20)*window.devicePixelRatio,
         height: (window.innerHeight - 20)*window.devicePixelRatio,
-        scene: MarsRoverGame,
+        scene: [StartScreen, MarsRoverGame],
 
         physics: {
             default: 'matter',
             matter: {
                 gravity: { x: 0, y: 0, scale: 0 }, // No gravity for top-down Mars rover
-                debug: {
-                    showBody: true,
-                    showStaticBody: true,
-                    showVelocity: true,
-                    bodyDebugColor: 0xff00ff,
-                    staticBodyDebugColor: 0x0000ff,
-                    velocityDebugColor: 0x00ff00
-                }
+                // debug: {
+                //     showBody: true,
+                //     showStaticBody: true,
+                //     showVelocity: true,
+                //     bodyDebugColor: 0xff00ff,
+                //     staticBodyDebugColor: 0x0000ff,
+                //     velocityDebugColor: 0x00ff00
+                // }
             }
         },
         scale: {
             mode: Phaser.Scale.FIT,
             autoCenter: Phaser.Scale.CENTER_BOTH
+        },
+        callbacks: {
+            postBoot: function (game) {
+                game.input.mouse.disableContextMenu();
+                game.canvas.style.width = '100%';
+                game.canvas.style.height = '100%';
+            }
         }
     };
 
