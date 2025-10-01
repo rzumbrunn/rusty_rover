@@ -227,19 +227,17 @@
             this.scoreText.setText('Samples: ' + this.score);
             
             // Spawn new sample
-            let x = Phaser.Math.Between(50, this.cameras.main.width - 50);
-            let y = Phaser.Math.Between(50, this.cameras.main.height - 50);
+            let x = Phaser.Math.Between(50, this.cameras.main.width*window.devicePixelRatio - 50);
+            let y = Phaser.Math.Between(50, this.cameras.main.height*window.devicePixelRatio - 50);
             let newSample = this.add.sprite(x, y, 'sample');
             this.matter.add.gameObject(newSample);
             this.samples.add(newSample);
-            
-            // Configure Matter.js body for new sample
-            newSample.setCircle(8);
+            // Configure Matter.js body foru new sample
+            newSample.setCircle(8*window.devicePixelRatio);
             newSample.setStatic(true);
             newSample.setSensor(true);
             newSample.sampleId = this.score + 15; // Unique ID
         }
-
         setupMobileControls() {
             // Create virtual D-pad for mobile
             if (this.sys.game.device.input.touch) {
@@ -292,6 +290,7 @@
 
         createQueueIndicator(inputState, index) {
             const startX = 150*window.devicePixelRatio;
+            const startY = 85*window.devicePixelRatio;
             const boxSize = 20*window.devicePixelRatio;
             const spacing = 25*window.devicePixelRatio;
             
