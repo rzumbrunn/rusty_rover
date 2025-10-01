@@ -4,8 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Rusty Rover</title>
-    <!-- <script src="/rusty-rover/src/phaser.js"></script> -->
-    <script src="/src/phaser.js"></script>
+    <script src="/rusty-rover/src/phaser.js"></script>
     <style>
         body {
             margin: 0;
@@ -21,8 +20,7 @@
             border-radius: 8px;
         }
     </style>
-    <!-- <link rel="manifest" href="/rusty-rover/src/static/manifest.json"> -->
-    <link rel="manifest" href="/src/static/manifest.json">
+    <link rel="manifest" href="/rusty-rover/src/static/manifest.json"> 
     <meta name="mobile-web-app-capable" content="yes">
 </head>
 <body>
@@ -168,9 +166,9 @@
             this.rocksPerSpawn = 4; // Rocks to spawn per check
             
             // Timer and game state
-            this.gameDuration = 6000; // 60 seconds in milliseconds
+            this.gameDuration = 60000; // 60 seconds in milliseconds
             this.startTime = null;
-            this.timeRemaining = 6;
+            this.timeRemaining = 60;
             this.gameActive = true;
             
             // Mobile scoreboard system
@@ -569,7 +567,7 @@
             // Update debug info
             let sampleCount = this.samples.children.entries.length;
             let rockCount = this.rocks.children.entries.length;
-            this.objectCountText.setText(`Objects: S:${sampleCount} R:${rockCount}`);
+            //this.objectCountText.setText(`Objects: S:${sampleCount} R:${rockCount}`);
         }
 
         setupMobileControls() {
@@ -910,34 +908,26 @@
                 strokeThickness: 2,
                 backgroundColor: '#222222',
                 padding: { x: 10, y: 5 }
-            }).setOrigin(0.5);
+            }).setOrigin(0.5)
+                .setScrollFactor(0)
+                .setInteractive()
+                .on('pointerdown', () => this.showMobileKeyboard());
             
-            // Make name display interactive to trigger mobile keyboard
-            nameDisplay.setInteractive();
-            nameDisplay.on('pointerdown', () => this.showMobileKeyboard());
             
-            // Submit button
-            const submitBtn = this.add.rectangle(0, height * 0.25, 200*window.devicePixelRatio, 50*window.devicePixelRatio, 0x00aa00);
-            const submitText = this.add.text(0, height * 0.25, 'SUBMIT SCORE', {
-                fontSize: String(16*window.devicePixelRatio)+"px",
-                fill: '#ffffff',
-                fontWeight: 'bold'
-            }).setOrigin(0.5);
-            
-            submitBtn.setInteractive();
-            submitBtn.on('pointerdown', () => this.submitScore());
             
             // Restart button  
-            const restartBtn = this.add.rectangle(0, height * 0.32, 200*window.devicePixelRatio, 40*window.devicePixelRatio, 0x0066aa);
+            const restartBtn = this.add.rectangle(0, height * 0.32, 200*window.devicePixelRatio, 40*window.devicePixelRatio, 0x0066aa)
+                .setScrollFactor(0)
+                .setInteractive()
+                .on('pointerdown', () => this.submitScore());
             const restartText = this.add.text(0, height * 0.32, 'PLAY AGAIN', {
                 fontSize: String(14*window.devicePixelRatio)+"px",
                 fill: '#ffffff'
             }).setOrigin(0.5);
             
-            restartBtn.setInteractive();
-            restartBtn.on('pointerdown', () => this.restartGame());
+            //restartBtn.on('pointerdown', () => this.restartGame());
             
-            this.gameOverModal.add([instructionText, nameDisplay, submitBtn, submitText, restartBtn, restartText]);
+            this.gameOverModal.add([instructionText, nameDisplay, restartBtn, restartText]);
             this.nameDisplayText = nameDisplay;
         }
 
@@ -1127,14 +1117,14 @@
             default: 'matter',
             matter: {
                 gravity: { x: 0, y: 0, scale: 0 }, // No gravity for top-down Mars rover
-                debug: {
-                    showBody: true,
-                    showStaticBody: true,
-                    showVelocity: true,
-                    bodyDebugColor: 0xff00ff,
-                    staticBodyDebugColor: 0x0000ff,
-                    velocityDebugColor: 0x00ff00
-                }
+                //debug: {
+                  //  showBody: true,
+                 //   showStaticBody: true,
+                   // showVelocity: true,
+                  //  bodyDebugColor: 0xff00ff,
+                  //  staticBodyDebugColor: 0x0000ff,
+                  //  velocityDebugColor: 0x00ff00
+              //  }
             }
         },
         scale: {
