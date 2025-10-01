@@ -19,13 +19,250 @@
             border: 2px solid #8B4513;
             border-radius: 8px;
         }
+
+        /* PWA Install Prompt Styles */
+        .install-prompt {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+
+        .install-modal {
+            background: #2c1810;
+            border: 2px solid #8B4513;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 400px;
+            margin: 20px;
+            text-align: center;
+            color: #ffffff;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .install-modal h3 {
+            color: #ff6600;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        .install-modal p {
+            margin-bottom: 20px;
+            line-height: 1.4;
+            color: #cccccc;
+        }
+
+        .install-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .install-btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .install-btn.primary {
+            background: #ff6600;
+            color: white;
+        }
+
+        .install-btn.primary:hover {
+            background: #e55a00;
+            transform: translateY(-2px);
+        }
+
+        .install-btn.secondary {
+            background: transparent;
+            color: #cccccc;
+            border: 2px solid #666;
+        }
+
+        .install-btn.secondary:hover {
+            background: #333;
+            border-color: #888;
+        }
+
+        .install-banner {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: #2c1810;
+            border: 2px solid #8B4513;
+            border-radius: 8px;
+            padding: 10px 15px;
+            color: white;
+            cursor: pointer;
+            display: none;
+            z-index: 1000;
+            transition: all 0.2s;
+        }
+
+        .install-banner:hover {
+            background: #3c2820;
+            transform: translateY(-2px);
+        }
+
+        .install-banner .close-banner {
+            float: right;
+            margin-left: 10px;
+            color: #ff6600;
+            font-weight: bold;
+        }
     </style>
     <link rel="manifest" href="/rusty-rover/src/static/manifest.json"> 
     <meta name="mobile-web-app-capable" content="yes">
 </head>
 <body>
+    <!-- PWA Installation Prompt -->
+    <div id="installPrompt" class="install-prompt">
+        <div class="install-modal">
+            <h3>🚀 Install Rusty Rover</h3>
+            <p>Install Rusty Rover as an app for the best experience! Get full-screen gameplay and quick access from your home screen.</p>
+            <div class="install-buttons">
+                <button id="installBtn" class="install-btn primary">Install App</button>
+                <button id="dismissBtn" class="install-btn secondary">Not Now</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PWA Install Banner -->
+    <div id="installBanner" class="install-banner">
+        📱 Install as App 
+        <span class="close-banner" onclick="dismissInstallBanner()">×</span>
+    </div>
 
     <script>
+    // PWA Installation Support
+    let deferredPrompt;
+    let installPromptShown = localStorage.getItem('installPromptShown');
+    
+    // Check if app is already installed
+    function isAppInstalled() {
+        return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+               (window.navigator && window.navigator.standalone) ||
+               document.referrer.includes('android-app://');
+    }
+
+    // Show install banner
+    function showInstallBanner() {
+        const banner = document.getElementById('installBanner');
+        if (banner && !isAppInstalled() && !installPromptShown) {
+            banner.style.display = 'block';
+            banner.onclick = () => {
+                showInstallPrompt();
+                banner.style.display = 'none';
+            };
+        }
+    }
+
+    // Show install prompt modal
+    function showInstallPrompt() {
+        const prompt = document.getElementById('installPrompt');
+        if (prompt) {
+            prompt.style.display = 'flex';
+        }
+    }
+
+    // Dismiss install banner
+    function dismissInstallBanner() {
+        const banner = document.getElementById('installBanner');
+        if (banner) {
+            banner.style.display = 'none';
+        }
+        localStorage.setItem('installPromptShown', 'true');
+    }
+
+    // Handle beforeinstallprompt event
+    window.addEventListener('beforeinstallprompt', (e) => {
+        // Prevent Chrome 67 and earlier from automatically showing the prompt
+        e.preventDefault();
+        // Stash the event so it can be triggered later
+        deferredPrompt = e;
+        
+        // Show install banner after a short delay (not immediately on page load)
+        setTimeout(() => {
+            if (!isAppInstalled() && !installPromptShown) {
+                showInstallBanner();
+            }
+        }, 3000);
+    });
+
+    // Handle install button click
+    document.addEventListener('DOMContentLoaded', () => {
+        const installBtn = document.getElementById('installBtn');
+        const dismissBtn = document.getElementById('dismissBtn');
+        const installPrompt = document.getElementById('installPrompt');
+
+        if (installBtn) {
+            installBtn.addEventListener('click', async () => {
+                if (deferredPrompt) {
+                    // Show the install prompt
+                    deferredPrompt.prompt();
+                    
+                    // Wait for the user to respond to the prompt
+                    const { outcome } = await deferredPrompt.userChoice;
+                    
+                    if (outcome === 'accepted') {
+                        console.log('User accepted the PWA install');
+                    } else {
+                        console.log('User dismissed the PWA install');
+                    }
+                    
+                    // Clear the deferredPrompt
+                    deferredPrompt = null;
+                } else {
+                    // Fallback for browsers that don't support beforeinstallprompt
+                    alert('To install this app:\n\n' +
+                          'Chrome/Edge: Menu → "Install Rusty Rover"\n' +
+                          'Safari: Share → "Add to Home Screen"\n' +
+                          'Firefox: Menu → "Install"');
+                }
+                
+                // Hide the prompt
+                installPrompt.style.display = 'none';
+                localStorage.setItem('installPromptShown', 'true');
+            });
+        }
+
+        if (dismissBtn) {
+            dismissBtn.addEventListener('click', () => {
+                installPrompt.style.display = 'none';
+                localStorage.setItem('installPromptShown', 'true');
+            });
+        }
+
+        // Show banner on iOS devices (which don't support beforeinstallprompt)
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        if (isIOS && !isAppInstalled() && !installPromptShown) {
+            setTimeout(() => {
+                showInstallBanner();
+            }, 5000);
+        }
+    });
+
+    // Handle app installed event
+    window.addEventListener('appinstalled', (evt) => {
+        console.log('PWA was installed successfully');
+        localStorage.setItem('installPromptShown', 'true');
+        const banner = document.getElementById('installBanner');
+        if (banner) {
+            banner.style.display = 'none';
+        }
+    });
+
     let params = new URLSearchParams(document.location.search);
     let real_delays = params.get('real_delays')
     if(real_delays == "true"){
