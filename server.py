@@ -1,8 +1,12 @@
 # flask server
 
 from flask import Flask, send_from_directory
-from flask import request, jsonify, render_template
+from flask import request, jsonify, render_template, escape
 import os
+from profanityfilter import ProfanityFilter
+pf = ProfanityFilter()
+
+
 
 global scores
 scores = []
@@ -15,6 +19,9 @@ app = Flask(
 
 def update_scores(name, score, planet):
     global scores
+
+    name = pf.censor(name)
+
     # Update the scores list
     scores.append({"name": name, "score": score, "planet": planet})
     # Overwrite same name if better
@@ -47,6 +54,11 @@ def receive_score():
     score = data.get('score')
     name = data.get('name')
     planet = data.get('planet')
+
+    score = escape(score)
+    name = escape(name)
+    planet = escape(planet)
+
     # Here you can process the score (e.g., save to a database or file)
     print(f"Received score: {score} from player: {name} on planet: {planet}")
     update_scores(name, score, planet)
